@@ -184,28 +184,37 @@ def W2_distance(emMean, emCov, trueMean, trueCov):
                    np.trace(emCov + trueCov - 2 * scipy.linalg.sqrtm(scipy.linalg.sqrtm(emCov) @ trueCov @ scipy.linalg.sqrtm(emCov))))
 
 
-def decent_LMC(num_dimensions, num_iterations, n_layers, means, covariances, eta):
+def decent_LMC_binary_tree(num_dimensions, num_iterations, n_layers, means, covariances, eta):
     num_nodes = 2 ** n_layers - 1
-    even_list, odd_list = even_odd_layer(num_nodes)
-    
+        
     # Initialize samples with zeros
     samples = np.zeros([num_iterations, num_nodes, num_dimensions])
 
-    for node in even_list:
+    for node in range(num_nodes):
         samples[0, node, :] = np.random.multivariate_normal(np.zeros(num_dimensions),np.identity(num_dimensions), size=1)
-
-    cov_connection = 3 * eta * np.identity(num_dimensions)  # Make sure eta is defined
 
     for i in range(1, num_iterations):
         if i % 10000 == 0:
             print(i)
-
-        for node in odd_list:
-            new_mean, new_cov = process_node(node, means, covariances, samples, i, num_nodes, cov_connection)
-            samples[i, node, :] = np.random.multivariate_normal(new_mean, new_cov, size=1)
-                
-        for node in even_list:
-            new_mean, new_cov = process_node(node, means, covariances, samples, i+1, num_nodes, cov_connection)
-            samples[i, node, :] = np.random.multivariate_normal(new_mean, new_cov, size=1)
+        for node in range(num_nodes):
+            parent = (node - 1) // 2
+            left_child = 2 * node + 1
+            right_child = 2 * node + 2
+            sum = 0
+            num = 0
+            if node != 0:
+                sum += samples[i-1, parent,:] /3
+                num += 1
+            if left_child < num_nodes:   
+                sum += samples[i-1, left_child,:] /3
+                num += 1
+            if right_child < num_nodes:   
+                sum += samples[i-1, right_child,:] /3
+                num += 1
+            sum += samples[i-1, node,:] * (1-num / 3)
+            
+            # under the assumption that cov is identity
+            gradient = samples[i-1, node,:] - means[node]
+            noise = np.random.multivariate_normal(np.zeros(num_dimensions), np.identity(num_dimensions), size=1)
+            samples[i, node, :]  = sum - eta * gradient + np.sqrt(2*eta) * noise   
     return samples
-    
